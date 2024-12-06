@@ -301,21 +301,6 @@ const UserManagement = () => {
     }
   };
 
-  const formatUserInfo = (user: User) => {
-    const parts = [];
-    if (user.first_name && user.last_name) {
-      parts.push(`${user.first_name} ${user.last_name}`);
-    }
-    if (user.pseudo) {
-      parts.push(`@${user.pseudo}`);
-    }
-    parts.push(user.email);
-    if (user.email === ADMIN_EMAIL) {
-      parts.push('(Administrateur)');
-    }
-    return parts.join(' • ');
-  };
-
   if (loading) {
     return (
       <Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
