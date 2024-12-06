@@ -14,6 +14,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuthContext } from '../contexts/AuthContext';
 import { UserLevel } from '../components/UserLevel';
+import { WeeklyChallenge } from '../components/WeeklyChallenge';
+import { DailyRewards } from '../components/DailyRewards';
 
 const MotionCard = motion(Card);
 
@@ -25,15 +27,28 @@ export default function Home() {
 
   useEffect(() => {
     loadCategories();
-  }, [user]); // Recharger les catégories quand l'utilisateur change
+  }, [user]);
 
-  const handleGameClick = async (route: string) => {
+  // Fonction pour vérifier les permissions
+  const hasPermission = (permission: string): boolean => {
+    if (!user) return false;
+    if (user.email === 'jj.pezin41@gmail.com') return true; // Admin principal
+    return user.user_metadata?.permissions?.[permission] === true;
+  };
+
+  const handleGameClick = async (route: string, requiredPermission: string) => {
     if (!user) {
       navigate('/login', { 
         state: { 
           returnTo: route
         }
       });
+      return;
+    }
+
+    // Vérifier la permission
+    if (!hasPermission(requiredPermission)) {
+      console.log('Permission refusée:', requiredPermission);
       return;
     }
 
@@ -75,29 +90,33 @@ export default function Home() {
     }
   };
 
+  // Filtrer les types de jeux en fonction des permissions
   const gameTypes = [
     {
       title: 'Mode Classique',
       description: 'Jouez à votre rythme',
-      action: () => handleGameClick('/game-classique'),
+      action: () => handleGameClick('/game-classique', 'classic-game'),
       icon: '🎮',
-      alt: 'Mode Classique'
+      alt: 'Mode Classique',
+      permission: 'classic-game'
     },
     {
       title: 'Roue de la Chance',
       description: 'Tentez votre chance',
-      action: () => handleGameClick('/roue'),
+      action: () => handleGameClick('/roue', 'wheel'),
       icon: '🎡',
-      alt: 'Roue de la Chance'
+      alt: 'Roue de la Chance',
+      permission: 'wheel'
     },
     {
       title: 'Scores',
       description: 'Voir les meilleurs scores',
-      action: () => navigate('/scores'),
+      action: () => handleGameClick('/scores', 'score'),
       icon: '🏆',
-      alt: 'Scores'
+      alt: 'Scores',
+      permission: 'score'
     }
-  ];
+  ].filter(game => hasPermission(game.permission));
 
   if (isLoading) {
     return (
@@ -204,79 +223,97 @@ export default function Home() {
         {user && <UserLevel />}
       </Box>
 
-      <Grid container spacing={4} justifyContent="center">
+      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={12}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+              <DailyRewards />
+            </Box>
+          </Grid>
+        </Grid>
+      </Container>
+
+      <Grid container spacing={3} justifyContent="center" sx={{ maxWidth: '600px', mx: 'auto' }}>
+        <Grid item xs={12} sm={6} md={6} sx={{ display: 'flex' }}>
+          <Box sx={{ width: '100%', maxWidth: '230px', mx: 'auto' }}>
+            <WeeklyChallenge />
+          </Box>
+        </Grid>
         {gameTypes.map((game, index) => (
-          <Grid item xs={12} sm={6} md={6} lg={3} key={game.title}>
-            <MotionCard
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-              whileHover={{ 
-                scale: 1.03,
-                boxShadow: '0 8px 16px rgba(0,0,0,0.1)'
-              }}
-              whileTap={{ scale: 0.98 }}
-              onClick={game.action}
-              sx={{
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                cursor: 'pointer',
-                borderRadius: 2,
-                bgcolor: 'background.paper',
-                transition: 'all 0.3s ease-in-out',
-              }}
-            >
-              <CardContent sx={{ 
-                flexGrow: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                textAlign: 'center',
-                p: 3
-              }}>
-                <Typography 
-                  variant="h1" 
-                  sx={{ 
-                    fontSize: '3rem',
-                    mb: 2 
-                  }}
-                >
-                  {game.icon}
-                </Typography>
-                <Typography 
-                  variant="h5" 
-                  component="h2" 
-                  gutterBottom
-                  sx={{
-                    fontWeight: 600,
-                    mb: 1
-                  }}
-                >
-                  {game.title}
-                </Typography>
-                <Typography 
-                  variant="body1" 
-                  color="text.secondary"
-                  sx={{ mb: 3, flexGrow: 1 }}
-                >
-                  {game.description}
-                </Typography>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  fullWidth
-                  size="large"
-                  sx={{
-                    borderRadius: 2,
-                    py: 1,
-                    mt: 'auto'
-                  }}
-                >
-                  Jouer
-                </Button>
-              </CardContent>
-            </MotionCard>
+          <Grid item xs={12} sm={6} md={6} key={game.title} sx={{ display: 'flex' }}>
+            <Box sx={{ width: '100%', maxWidth: '230px', mx: 'auto' }}>
+              <MotionCard
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+                whileHover={{ 
+                  scale: 1.03,
+                  boxShadow: '0 8px 16px rgba(0,0,0,0.1)'
+                }}
+                whileTap={{ scale: 0.98 }}
+                onClick={game.action}
+                sx={{
+                  width: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  cursor: 'pointer',
+                  borderRadius: 2,
+                  bgcolor: 'background.paper',
+                  transition: 'all 0.3s ease-in-out',
+                  height: '100%',
+                }}
+              >
+                <CardContent sx={{ 
+                  flexGrow: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  textAlign: 'center',
+                  p: 2
+                }}>
+                  <Typography 
+                    variant="h1" 
+                    sx={{ 
+                      fontSize: '2.2rem',
+                      mb: 1.5
+                    }}
+                  >
+                    {game.icon}
+                  </Typography>
+                  <Typography 
+                    variant="h5" 
+                    component="h2" 
+                    gutterBottom
+                    sx={{
+                      fontWeight: 600,
+                      mb: 1
+                    }}
+                  >
+                    {game.title}
+                  </Typography>
+                  <Typography 
+                    variant="body1" 
+                    color="text.secondary"
+                    sx={{ mb: 3, flexGrow: 1 }}
+                  >
+                    {game.description}
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    fullWidth
+                    size="large"
+                    sx={{
+                      borderRadius: 2,
+                      py: 1,
+                      mt: 'auto'
+                    }}
+                  >
+                    Jouer
+                  </Button>
+                </CardContent>
+              </MotionCard>
+            </Box>
           </Grid>
         ))}
       </Grid>

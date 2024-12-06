@@ -4,9 +4,6 @@ import { useAuthContext } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { UserProfile } from '../components/UserProfile';
 import { Achievements } from '../components/Achievements';
-import { Challenges } from '../components/Challenges';
-import { Leaderboard } from '../components/Leaderboard';
-import { DailyRewards } from '../components/DailyRewards';
 
 interface Profile {
   id: string;
@@ -202,18 +199,13 @@ export default function Profile() {
 
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold">Profil</h1>
-            <DailyRewards />
           </div>
 
           <div className="space-y-8">
             <UserProfile {...userProfileData} />
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-8">
-                <Achievements />
-                <Challenges />
-              </div>
-              <Leaderboard />
+            <div className="w-full">
+              <Achievements />
             </div>
           </div>
 

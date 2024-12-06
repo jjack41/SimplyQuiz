@@ -1,7 +1,7 @@
 import { RouterProvider, createBrowserRouter } from 'react-router-dom';
-import { ThemeProvider as MuiThemeProvider, CssBaseline } from '@mui/material';
+import { ThemeProvider as MuiThemeProvider, CssBaseline, CircularProgress, Box } from '@mui/material';
 import { getTheme } from './theme';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuthContext } from './contexts/AuthContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { GameProvider } from './contexts/GameContext';
 import { StatsProvider } from './contexts/StatsContext';
@@ -16,8 +16,9 @@ import Scores from './pages/Scores';
 import Profile from './pages/Profile';
 import RouePage from './pages/RouePage';
 import Settings from './pages/Settings';
+import UserManagement from './pages/UserManagement';
 import { Toaster } from 'react-hot-toast';
-
+import { ProtectedRoute } from './components/ProtectedRoute';
 
 const router = createBrowserRouter([
   {
@@ -26,43 +27,51 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Home />,
+        element: <ProtectedRoute requiredPermission="home"><Home /></ProtectedRoute>,
       },
       {
         path: 'login',
         element: <Login />,
       },
       {
-        path: 'scores',
-        element: <Scores />,
-      },
-      {
-        path: 'profile',
-        element: <Profile />,
-      },
-      {
-        path: 'categories',
-        element: <Categories />,
-      },
-      {
-        path: 'questions',
-        element: <Questions />,
-      },
-      {
         path: 'reset-password',
         element: <ResetPassword />,
       },
       {
-        path: 'game-classique',
-        element: <GameClassique />,
+        path: 'scores',
+        element: <ProtectedRoute requiredPermission="score"><Scores /></ProtectedRoute>,
       },
       {
-        path: 'roue',
-        element: <RouePage />,
+        path: 'profile',
+        element: <ProtectedRoute requiredPermission="profile"><Profile /></ProtectedRoute>,
+      },
+      {
+        path: 'categories',
+        element: <ProtectedRoute requiredPermission="category"><Categories /></ProtectedRoute>,
+      },
+      {
+        path: 'questions',
+        element: <ProtectedRoute requiredPermission="question"><Questions /></ProtectedRoute>,
+      },
+      {
+        path: 'game-classique',
+        element: <ProtectedRoute requiredPermission="classic-game"><GameClassique /></ProtectedRoute>,
       },
       {
         path: 'settings',
-        element: <Settings />,
+        element: <ProtectedRoute requiredPermission="setting"><Settings /></ProtectedRoute>,
+      },
+      {
+        path: 'roue',
+        element: <ProtectedRoute requiredPermission="wheel"><RouePage /></ProtectedRoute>,
+      },
+      {
+        path: 'user-management',
+        element: (
+          <ProtectedRoute requiredPermission="user-management">
+            <UserManagement />
+          </ProtectedRoute>
+        ),
       },
     ],
   },
@@ -70,13 +79,25 @@ const router = createBrowserRouter([
 
 function AppContent() {
   const { darkMode } = useTheme();
+  const { loading } = useAuthContext();
   const theme = getTheme(darkMode ? 'dark' : 'light');
+
+  if (loading) {
+    return (
+      <MuiThemeProvider theme={theme}>
+        <CssBaseline />
+        <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
+          <CircularProgress />
+        </Box>
+      </MuiThemeProvider>
+    );
+  }
 
   return (
     <MuiThemeProvider theme={theme}>
       <CssBaseline />
       <Toaster position="top-right" />
-     <RouterProvider router={router} />
+      <RouterProvider router={router} />
     </MuiThemeProvider>
   );
 }

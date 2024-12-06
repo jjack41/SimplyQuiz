@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Container,
   Typography,
@@ -9,115 +9,82 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Tabs,
-  Tab,
-  CircularProgress
+  Box,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
 } from '@mui/material';
-import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
-import { supabase } from '../lib/supabase';
 
-interface Score {
-  id: number;
-  player_name: string;
+interface LeaderboardEntry {
+  rang: number;
+  joueur: string;
   score: number;
-  time_spent: number;
-  game_mode: string;
-  created_at: string;
+  parties: number;
+  moyenne: number;
 }
 
 export default function Scores() {
-  const [tabValue, setTabValue] = useState(0);
-  const [scores, setScores] = useState<Score[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState('Cette semaine');
+  const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>([]);
 
-  const fetchScores = async () => {
-    try {
-      setLoading(true);
-      // Map the tab value to the correct game mode in the database
-      const gameMode = tabValue === 0 ? 'classique' : tabValue === 1 ? 'contre-la-montre' : 'defis';
-      
-      const { data, error } = await supabase
-        .from('scores')
-        .select('*')
-        .eq('game_mode', gameMode)
-        .order('score', { ascending: false })
-        .order('time_spent', { ascending: true })
-        .limit(10);
-
-      if (error) {
-        console.error('Erreur lors de la récupération des scores:', error);
-        throw error;
-      }
-
-      setScores(data || []);
-    } catch (error) {
-      console.error('Error fetching scores:', error);
-      setScores([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchScores();
-  }, [tabValue]);
-
-  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
-  };
-
-  const formatTime = (seconds: number): string => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}m ${remainingSeconds.toFixed(1)}s`;
+  const handlePeriodChange = (event: any) => {
+    setPeriod(event.target.value);
+    // Here you would typically fetch new data based on the selected period
   };
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4 }}>
-      <Typography variant="h4" component="h1" gutterBottom align="center">
-        Meilleurs Scores
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Typography variant="h4" component="h1" gutterBottom align="center" sx={{ mb: 4 }}>
+        Classement
       </Typography>
 
-      <Tabs value={tabValue} onChange={handleTabChange} centered sx={{ mb: 3 }}>
-        <Tab label="Mode Classique" />
-        <Tab label="Contre la Montre" />
-        <Tab label="Défis" />
-      </Tabs>
+      <Box sx={{ minWidth: 120, mb: 3 }}>
+        <FormControl fullWidth>
+          <InputLabel id="period-select-label">Période</InputLabel>
+          <Select
+            labelId="period-select-label"
+            id="period-select"
+            value={period}
+            label="Période"
+            onChange={handlePeriodChange}
+          >
+            <MenuItem value="Cette semaine">Cette semaine</MenuItem>
+            <MenuItem value="Ce mois">Ce mois</MenuItem>
+            <MenuItem value="Cette année">Cette année</MenuItem>
+            <MenuItem value="Tout">Tout</MenuItem>
+          </Select>
+        </FormControl>
+      </Box>
 
       <TableContainer component={Paper}>
-        <Table>
+        <Table sx={{ minWidth: 650 }} aria-label="classement table">
           <TableHead>
             <TableRow>
-              <TableCell><EmojiEventsIcon /> Rang</TableCell>
+              <TableCell>Rang</TableCell>
               <TableCell>Joueur</TableCell>
-              <TableCell>Score</TableCell>
-              <TableCell>Temps</TableCell>
-              <TableCell>Date</TableCell>
+              <TableCell align="right">Score</TableCell>
+              <TableCell align="right">Parties</TableCell>
+              <TableCell align="right">Moyenne</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {loading ? (
+            {leaderboardData.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
-                  <CircularProgress />
-                </TableCell>
-              </TableRow>
-            ) : scores.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
-                  Aucun score disponible
+                <TableCell colSpan={5} align="center">
+                  Aucune donnée disponible pour cette période
                 </TableCell>
               </TableRow>
             ) : (
-              scores.map((score, index) => (
-                <TableRow key={score.id}>
-                  <TableCell>{index + 1}</TableCell>
-                  <TableCell>{score.player_name}</TableCell>
-                  <TableCell>{score.score}</TableCell>
-                  <TableCell>{formatTime(score.time_spent)}</TableCell>
-                  <TableCell>
-                    {new Date(score.created_at).toLocaleDateString()}
+              leaderboardData.map((row) => (
+                <TableRow key={row.rang}>
+                  <TableCell component="th" scope="row">
+                    {row.rang}
                   </TableCell>
+                  <TableCell>{row.joueur}</TableCell>
+                  <TableCell align="right">{row.score}</TableCell>
+                  <TableCell align="right">{row.parties}</TableCell>
+                  <TableCell align="right">{row.moyenne}</TableCell>
                 </TableRow>
               ))
             )}

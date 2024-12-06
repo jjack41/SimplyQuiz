@@ -23,7 +23,11 @@ import {
   Home as HomeIcon,
   Menu as MenuIcon,
   Close,
-  Settings
+  Settings,
+  AdminPanelSettings as AdminPanelSettingsIcon,
+  Gamepad as GamepadIcon,
+  Leaderboard as LeaderboardIcon,
+  Casino as CasinoIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuthContext } from '../contexts/AuthContext';
@@ -31,6 +35,8 @@ import { useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { getTheme } from '../theme';
+
+const ADMIN_EMAIL = 'admin@example.com'; // Définir l'email de l'administrateur principal
 
 interface LayoutProps {
   children?: React.ReactNode;
@@ -69,11 +75,29 @@ const Layout = ({ children }: LayoutProps) => {
   const menuItems = [
     { text: 'Accueil', icon: <HomeIcon />, path: '/' },
     ...(user ? [
-      { text: 'Catégories', icon: <CategoryIcon />, path: '/categories' },
-      { text: 'Questions', icon: <QuestionIcon />, path: '/questions' },
-      { text: 'Mon compte', icon: <Person />, path: '/profile' },
-      { text: 'Paramètres', icon: <Settings />, path: '/settings' },
-    ] : []),
+      { text: 'Catégories', icon: <CategoryIcon />, path: '/categories', permission: 'category' },
+      { text: 'Questions', icon: <QuestionIcon />, path: '/questions', permission: 'question' },
+      { text: 'Mon compte', icon: <Person />, path: '/profile', permission: 'profile' },
+      { text: 'Paramètres', icon: <Settings />, path: '/settings', permission: 'setting' },
+      { text: 'Jeu Classique', icon: <GamepadIcon />, path: '/game-classique', permission: 'classic-game' },
+      { text: 'Scores', icon: <LeaderboardIcon />, path: '/scores', permission: 'score' },
+      { text: 'Roue', icon: <CasinoIcon />, path: '/roue', permission: 'wheel' },
+      { 
+        text: 'Gestion utilisateurs', 
+        icon: <AdminPanelSettingsIcon />, 
+        path: '/user-management',
+        permission: 'user-management',
+        requiresAdmin: true
+      },
+    ].filter(item => {
+      // L'administrateur principal a toujours accès à tout
+      if (user.email === ADMIN_EMAIL) return true;
+      
+      // Pour les autres utilisateurs, vérifier les permissions
+      const userPermissions = user.user_metadata?.permissions || {};
+      if (item.requiresAdmin && !userPermissions['admin']) return false;
+      return userPermissions[item.permission] === true;
+    }) : []),
   ];
 
   const drawerContent = (
