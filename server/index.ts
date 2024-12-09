@@ -5,6 +5,12 @@ import fs from 'fs';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import dotenv from 'dotenv';
+
+// Charger les variables d'environnement
+dotenv.config({
+  path: process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development'
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -13,8 +19,9 @@ const app = express();
 const port = process.env.PORT || 3002;
 
 // Configuration de CORS
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
 app.use(cors({
-  origin: 'http://localhost:3000', // URL du client Vite
+  origin: CLIENT_URL,
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type']
 }));
