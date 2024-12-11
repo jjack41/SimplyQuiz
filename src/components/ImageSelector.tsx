@@ -3,8 +3,6 @@ import { Box, IconButton, Typography, Paper, CircularProgress } from '@mui/mater
 import { Delete as DeleteIcon, CloudUpload as CloudUploadIcon, AddPhotoAlternate as AddPhotoIcon } from '@mui/icons-material';
 import { mediaDB } from '../services/mediaDB';
 import { styled, useTheme } from '@mui/material/styles';
-// Suppression de l'import inutilisé de useImageCache
-// import { useImageCache } from '../hooks/useImageCache';
 
 interface ImageSelectorProps {
   questionId: string;
@@ -124,35 +122,61 @@ export default function ImageSelector({ questionId, currentImage, onImageChange 
       const newLocalUrl = URL.createObjectURL(file);
       setLocalImageUrl(newLocalUrl);
 
+      // Si une image existe déjà, la supprimer
       if (currentImage) {
-        try {
-          await mediaDB.delete(currentImage);
-        } catch (error) {
-          console.error('Erreur lors de la suppression de l\'ancienne image:', error);
+        const oldFileName = currentImage.split('/').pop();
+        if (oldFileName) {
+          try {
+            await mediaDB.delete(oldFileName);
+            await fetch(`/api/delete-media?path=${oldFileName}`, {
+              method: 'DELETE',
+              credentials: 'include'
+            });
+          } catch (error) {
+            console.error('Erreur lors de la suppression de l\'ancienne image:', error);
+          }
         }
       }
 
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('http://localhost:3002/api/upload', {
+      console.log('[ImageSelector] Début upload fichier:', {
+        nom: file.name,
+        taille: file.size,
+        type: file.type
+      });
+
+      const response = await fetch('/api/upload', {
         method: 'POST',
         body: formData
       });
 
       if (!response.ok) {
-        throw new Error('Erreur lors de l\'upload au serveur');
+        const errorText = await response.text();
+        console.error('[ImageSelector] Erreur serveur:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
+        throw new Error(`Erreur serveur: ${response.status} ${response.statusText}`);
       }
 
-      const { path } = await response.json();
-      const fileName = path.split('/').pop();
+      const data = await response.json();
+      console.log('[ImageSelector] Réponse serveur:', data);
+      
+      const fileName = data.path.split('/').pop();
+      console.log('[ImageSelector] Nom du fichier extrait:', fileName);
+      
+      // Stocker dans IndexedDB avec le nom du fichier uniquement
       const mediaId = await mediaDB.store(file, questionId, fileName);
       
       const mediaItem = await mediaDB.get(mediaId);
       if (mediaItem) {
         const imageUrl = URL.createObjectURL(mediaItem.blob);
         setDisplayedImage(imageUrl);
-        onImageChange(mediaId);
+        // Retourner le chemin relatif
+        onImageChange(`media/${fileName}`);
       }
 
       setLocalImageUrl(null);
@@ -173,10 +197,13 @@ export default function ImageSelector({ questionId, currentImage, onImageChange 
     try {
       await mediaDB.delete(currentImage);
 
+      // Extraire le nom du fichier du chemin relatif
       const fileName = currentImage.split('/').pop();
       if (fileName) {
-        await fetch(`http://localhost:3002/api/delete-media?path=media/${fileName}`, {
-          method: 'DELETE'
+        console.log('[ImageSelector] Suppression du fichier:', fileName);
+        await fetch(`/api/delete-media?path=${fileName}`, {
+          method: 'DELETE',
+          credentials: 'include'
         });
       }
 

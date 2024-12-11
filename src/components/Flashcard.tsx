@@ -83,32 +83,46 @@ export default function Flashcard({
     const loadImage = async () => {
       if (question.image_url) {
         setIsImageLoading(true);
+        setImageError(false);
         try {
-          // Si l'URL est une URL Supabase, extraire l'ID du fichier
-          const url = question.image_url;
-          const imageId = url.includes('supabase.co') ? url.split('/').pop() : url;
-          
-          if (imageId) {
-            const imageUrl = await getCachedImage(imageId);
-            if (imageUrl) {
-              setImageUrl(imageUrl);
-              setImageError(false);
-            } else {
-              setImageError(true);
-            }
+          console.log('[Flashcard] Chargement de l\'image:', question.image_url);
+          const cachedUrl = await getCachedImage(question.image_url);
+          if (cachedUrl) {
+            setImageUrl(cachedUrl);
+            setImageError(false);
           } else {
+            console.error('[Flashcard] Image non trouvée:', question.image_url);
             setImageError(true);
           }
         } catch (error) {
-          console.error('Erreur lors du chargement de l\'image:', error);
+          console.error('[Flashcard] Erreur de chargement:', error);
           setImageError(true);
+        } finally {
+          setIsImageLoading(false);
         }
-        setIsImageLoading(false);
+      } else {
+        setImageUrl(null);
+        setImageError(false);
       }
     };
 
     loadImage();
-  }, [question.image_url]);
+
+    // Précharger les images des prochaines questions
+    if (nextQuestions.length > 0) {
+      const nextImages = nextQuestions
+        .slice(0, 3) // Précharger les 3 prochaines questions
+        .map(q => q.image_url)
+        .filter((url): url is string => url !== null);
+
+      if (nextImages.length > 0) {
+        console.log('[Flashcard] Préchargement des prochaines images:', nextImages);
+        preloadImages(nextImages).catch(error => {
+          console.error('[Flashcard] Erreur de préchargement:', error);
+        });
+      }
+    }
+  }, [question.image_url, getCachedImage, preloadImages, nextQuestions]);
 
   useEffect(() => {
     if (nextQuestions.length > 0) {

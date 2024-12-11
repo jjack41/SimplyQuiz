@@ -1,4 +1,5 @@
-import { mediaDB } from '../services/mediaDB';import { useState, useEffect } from 'react';
+import { mediaDB } from '../services/mediaDB';
+import { useState, useEffect } from 'react';
 import {
   Container,
   Typography,
@@ -226,9 +227,9 @@ export default function Questions() {
                     <FormControlLabel
                       control={
                         <Checkbox
-                          checked={formData.correct_answers.includes(option)}
-                          onChange={() => handleCorrectAnswerChange(option)}
-                        />
+                        checked={formData.correct_answers.includes(option)}
+                        onChange={() => handleCorrectAnswerChange(option)}
+                      />
                       }
                       label="Correcte"
                     />
@@ -422,6 +423,8 @@ export default function Questions() {
   const handleDelete = async (questionId: number) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer cette question ?')) {
       try {
+        console.log('Début de la suppression de la question:', questionId);
+        
         // Récupérer la question pour obtenir les URLs des médias
         const { data: question, error: fetchError } = await supabase
           .from('questions')
@@ -429,43 +432,76 @@ export default function Questions() {
           .eq('id', questionId)
           .single();
 
-        if (fetchError) throw fetchError;
+        if (fetchError) {
+          console.error('Erreur lors de la récupération de la question:', fetchError);
+          throw fetchError;
+        }
 
-        // Supprimer les médias de IndexedDB et du dossier public/media
+        console.log('Question récupérée:', question);
+
+        // Supprimer les médias
         if (question) {
           const mediaToDelete = [
             question.image_url,
             question.feedback_media_url
-          ].filter(url => url !== null);
+          ].filter(url => url !== null) as string[];
+
+          console.log('Médias à supprimer:', mediaToDelete);
 
           for (const mediaUrl of mediaToDelete) {
             try {
-              // Supprimer de IndexedDB
-              await mediaDB.delete(mediaUrl!);
-              
-              // Supprimer le fichier du dossier public/media
-              const fileName = mediaUrl!.split('/').pop();
+              // Extraire le nom du fichier de l'URL
+              const fileName = mediaUrl.split('/').pop();
+              console.log('Suppression du fichier:', fileName);
+
               if (fileName) {
-                await fetch(`http://localhost:3002/api/delete-media?path=media/${fileName}`, {
-                  method: 'DELETE'
-                });
+                // Supprimer de IndexedDB
+                try {
+                  await mediaDB.delete(mediaUrl);
+                  console.log('Fichier supprimé de IndexedDB:', fileName);
+                } catch (dbError) {
+                  console.warn('Erreur IndexedDB (non bloquante):', dbError);
+                }
+
+                // Supprimer du serveur
+                try {
+                  const response = await fetch(`/api/delete-media?path=${encodeURIComponent(fileName)}`, {
+                    method: 'DELETE'
+                  });
+
+                  if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Erreur serveur:', errorText);
+                    throw new Error(`Erreur serveur: ${response.status} ${response.statusText}`);
+                  }
+
+                  console.log('Fichier supprimé du serveur:', fileName);
+                } catch (serverError) {
+                  console.error('Erreur lors de la suppression sur le serveur:', serverError);
+                  // Continue même si la suppression du fichier échoue
+                }
               }
-            } catch (err) {
-              console.error('Erreur lors de la suppression du média:', err);
+            } catch (mediaError) {
+              console.error('Erreur lors de la suppression du média:', mediaError);
+              // Continue avec les autres suppressions même si une échoue
             }
           }
         }
 
         // Supprimer la question de la base de données
-        const { error } = await supabase
+        const { error: deleteError } = await supabase
           .from('questions')
           .delete()
           .eq('id', questionId);
 
-        if (error) throw error;
+        if (deleteError) throw deleteError;
+
+        console.log('Question supprimée avec succès');
+        toast.success('Question supprimée avec succès');
         loadQuestions();
       } catch (err: any) {
-        setError(err.message);
+        console.error('Erreur lors de la suppression:', err);
+        toast.error('Erreur lors de la suppression: ' + err.message);
       }
     }
   };
@@ -473,17 +509,68 @@ export default function Questions() {
   const handleDuplicate = async (question: Question) => {
     try {
       const { id, created_at, ...questionData } = question;
+
+      // Dupliquer les médias si présents
+      let newImageUrl = null;
+      let newFeedbackMediaUrl = null;
+
+      if (questionData.image_url) {
+        try {
+          // Extraire le nom du fichier du chemin relatif
+          const originalFileName = questionData.image_url.split('/').pop();
+          if (originalFileName) {
+            const originalImage = await mediaDB.get(originalFileName);
+            if (originalImage && originalImage.blob) {
+              // Créer un nouveau Blob avec le type MIME correct
+              const blob = new Blob([originalImage.blob], { type: originalImage.blob.type });
+              // Créer un nouveau File à partir du Blob
+              const file = new File([blob], `duplicate-${id}.png`, { lastModified: Date.now(), type: blob.type });
+              await mediaDB.store(file, `duplicate-${id}`, originalFileName);
+              newImageUrl = `media/${originalFileName}`;
+            }
+          }
+        } catch (err) {
+          console.error('Erreur lors de la duplication de l\'image:', err);
+        }
+      }
+
+      if (questionData.feedback_media_url) {
+        try {
+          // Extraire le nom du fichier du chemin relatif
+          const originalFileName = questionData.feedback_media_url.split('/').pop();
+          if (originalFileName) {
+            const originalFeedbackMedia = await mediaDB.get(originalFileName);
+            if (originalFeedbackMedia && originalFeedbackMedia.blob) {
+              // Créer un nouveau Blob avec le type MIME correct
+              const blob = new Blob([originalFeedbackMedia.blob], { type: originalFeedbackMedia.blob.type });
+              // Créer un nouveau File à partir du Blob
+              const file = new File([blob], `duplicate-${id}.png`, { lastModified: Date.now(), type: blob.type });
+              await mediaDB.store(file, `duplicate-${id}-feedback`, originalFileName);
+              newFeedbackMediaUrl = `media/${originalFileName}`;
+            }
+          }
+        } catch (err) {
+          console.error('Erreur lors de la duplication du média de feedback:', err);
+        }
+      }
+
+      // Créer la nouvelle question avec les nouveaux chemins de médias
       const { error } = await supabase
         .from('questions')
         .insert([{
           ...questionData,
-          question: `${question.question} (copie)`,
+          question: `${questionData.question} (copie)`,
+          image_url: newImageUrl || null,
+          feedback_media_url: newFeedbackMediaUrl || null
         }]);
 
       if (error) throw error;
+
       loadQuestions();
+      toast.success('Question dupliquée avec succès');
     } catch (err: any) {
-      setError(err.message);
+      console.error('Erreur lors de la duplication:', err);
+      toast.error('Erreur lors de la duplication: ' + err.message);
     }
   };
 
@@ -506,18 +593,30 @@ export default function Questions() {
 
           for (const mediaUrl of mediaToDelete) {
             try {
-              // Supprimer de IndexedDB
-              await mediaDB.delete(mediaUrl!);
-              
-              // Supprimer le fichier du dossier public/media
-              const fileName = mediaUrl!.split('/').pop();
+              // Extraire le nom du fichier du chemin relatif
+              const fileName = mediaUrl.split('/').pop();
               if (fileName) {
-                await fetch(`http://localhost:3002/api/delete-media?path=media/${fileName}`, {
-                  method: 'DELETE'
+                const deleteUrl = `/api/delete-media?path=${fileName}`;  // URL relative
+                console.log('URL de suppression:', deleteUrl);
+                
+                const response = await fetch(deleteUrl, {
+                  method: 'DELETE',
+                  credentials: 'include',
+                  headers: {
+                    'Accept': 'application/json'
+                  }
                 });
+                
+                if (!response.ok) {
+                  throw new Error(`Delete failed: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                console.log('Résultat de la suppression:', result);
               }
             } catch (err) {
               console.error('Erreur lors de la suppression du média:', err);
+              // Continue with other deletions even if one fails
             }
           }
         }

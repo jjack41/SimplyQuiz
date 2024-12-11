@@ -6,33 +6,65 @@ export interface MediaFile {
   lastModified: number;
 }
 
-class MediaService {
-  private readonly MEDIA_PATH = '/media';
+export class MediaService {
+  private static instance: MediaService;
+  private constructor() {}
+
+  static getInstance(): MediaService {
+    if (!MediaService.instance) {
+      MediaService.instance = new MediaService();
+    }
+    return MediaService.instance;
+  }
 
   /**
    * Sauvegarde un fichier dans le dossier public/media
    */
   async saveFile(file: File): Promise<MediaFile> {
     try {
+      console.log('[MediaService] Début de l\'upload du fichier:', {
+        nom: file.name,
+        taille: file.size,
+        type: file.type
+      });
+
       // Générer un nom de fichier unique
       const fileName = `${Date.now()}-${file.name}`;
-      const filePath = `${this.MEDIA_PATH}/${fileName}`;
+      const filePath = `media/${fileName}`;
+      console.log('[MediaService] Nom de fichier généré:', fileName);
 
       // Créer un FormData pour l'upload
       const formData = new FormData();
       formData.append('file', file);
 
+      // Utiliser un chemin relatif pour l'API
+      const apiUrl = new URL('/api/upload', window.location.origin);
+      console.log('[MediaService] URL de l\'API:', apiUrl.toString());
+
       // Envoyer le fichier au serveur
-      const response = await fetch('/api/upload', {
+      const response = await fetch(apiUrl, {
         method: 'POST',
-        body: formData
+        body: formData,
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+        }
       });
 
       if (!response.ok) {
-        throw new Error(`Erreur lors de l'upload: ${response.statusText}`);
+        const errorData = await response.text();
+        console.error('[MediaService] Erreur serveur:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData
+        });
+        throw new Error(`Erreur serveur: ${response.status} ${response.statusText}`);
       }
 
-      // Retourner les informations du fichier
+      const data = await response.json();
+      console.log('[MediaService] Fichier uploadé avec succès:', data);
+
+      // Retourner les informations du fichier avec le chemin relatif
       return {
         id: fileName,
         path: filePath,
@@ -41,7 +73,7 @@ class MediaService {
         lastModified: file.lastModified
       };
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde du fichier:', error);
+      console.error('[MediaService] Erreur lors de l\'upload:', error);
       throw error;
     }
   }
@@ -51,11 +83,13 @@ class MediaService {
    */
   getMediaUrl(path: string): string {
     if (!path) return '';
+    // Nettoyer le chemin pour s'assurer qu'il est relatif
+    const cleanPath = path.replace(/^https?:\/\/[^\/]+/, '').replace(/^\/+/, '');
     // S'assurer que le chemin commence par /media
-    if (!path.startsWith(this.MEDIA_PATH)) {
-      path = `${this.MEDIA_PATH}/${path}`;
+    if (!cleanPath.startsWith('media/')) {
+      return `media/${cleanPath}`;
     }
-    return path;
+    return cleanPath;
   }
 
   /**
@@ -91,4 +125,4 @@ class MediaService {
   }
 }
 
-export const mediaService = new MediaService();
+export const mediaService = MediaService.getInstance();

@@ -11,9 +11,14 @@ const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 heures
 export const useImageCache = () => {
   const getCachedImage = useCallback(async (imageId: string): Promise<string | null> => {
     try {
+      // Nettoyer l'ID de l'image pour obtenir le nom du fichier
+      const fileName = imageId.split('/').pop() || imageId;
+      console.log('[ImageCache] Récupération de l\'image:', fileName);
+
       // Essayer d'abord de récupérer l'image depuis IndexedDB
-      const cachedImage = await mediaDB.get(imageId);
+      const cachedImage = await mediaDB.get(fileName);
       if (cachedImage && cachedImage.metadata && cachedImage.metadata.timestamp) {
+        console.log('[ImageCache] Image trouvée dans IndexedDB');
         const cacheEntry: CacheEntry = {
           url: URL.createObjectURL(cachedImage.blob),
           timestamp: cachedImage.metadata.timestamp
@@ -22,52 +27,56 @@ export const useImageCache = () => {
         if (isCachedImageValid) {
           return cacheEntry.url;
         } else {
-          // Si l'image est obsolète, la supprimer de IndexedDB
-          await mediaDB.delete(imageId);
+          console.log('[ImageCache] Cache expiré, suppression');
+          await mediaDB.delete(fileName);
         }
-      } else if (cachedImage) {
-        // Handle the case where timestamp is undefined
-        console.error('Timestamp is not defined for cached image:', cachedImage);
-      } else {
-        console.error('Cached image not found for ID:', imageId);
       }
 
-      // Si l'image n'est pas dans IndexedDB, essayer le serveur local
+      // Si l'image n'est pas dans IndexedDB, essayer le serveur
       try {
-        const localResponse = await fetch(`http://localhost:3002/media/${imageId}`);
-        if (localResponse.ok) {
-          const blob = await localResponse.blob();
+        console.log('[ImageCache] Récupération depuis le serveur');
+        // Nettoyer le chemin pour éviter le double 'media/'
+        const cleanFileName = fileName.replace(/^media\//, '');
+        const response = await fetch(`/media/${cleanFileName}`);
+        if (response.ok) {
+          const blob = await response.blob();
           const cacheEntry: CacheEntry = {
             url: URL.createObjectURL(blob),
             timestamp: Date.now()
           };
+          
+          console.log('[ImageCache] Image récupérée, mise en cache');
           // Stocker l'image dans IndexedDB pour les prochaines utilisations
           await mediaDB.putMediaItem({
-            id: imageId,
+            id: fileName,
             type: 'image',
             blob,
             metadata: {
-              name: imageId,
+              name: fileName,
               size: blob.size,
-              lastModified: cacheEntry.timestamp
+              lastModified: cacheEntry.timestamp,
+              timestamp: cacheEntry.timestamp
             }
           });
-          return cacheEntry.url;
-        }
-      } catch (localError) {
-        console.error('Erreur lors de la récupération depuis le serveur local:', localError);
-      }
 
-      return null;
+          return cacheEntry.url;
+        } else {
+          console.error('[ImageCache] Erreur serveur:', response.status, response.statusText);
+          return null;
+        }
+      } catch (error) {
+        console.error('[ImageCache] Erreur réseau:', error);
+        return null;
+      }
     } catch (error) {
-      console.error('Erreur lors de la récupération de l\'image:', error);
+      console.error('[ImageCache] Erreur générale:', error);
       return null;
     }
   }, []);
 
   const preloadImages = useCallback(async (imageIds: string[]) => {
-    const promises = imageIds.map(id => getCachedImage(id));
-    await Promise.all(promises);
+    console.log('[ImageCache] Préchargement des images:', imageIds);
+    return Promise.all(imageIds.map(id => getCachedImage(id)));
   }, [getCachedImage]);
 
   return { getCachedImage, preloadImages };

@@ -15,25 +15,48 @@ class MediaDB {
   private db: IDBDatabase | null = null;
   private readonly DB_NAME = 'SimplyQuizMedia';
   private readonly STORE_NAME = 'media';
-  private readonly VERSION = 1;
+  private readonly VERSION = 2; // Augmenter la version
 
   async init(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.DB_NAME, this.VERSION);
+      console.log('[MediaDB] Initialisation de la base de données...');
+      
+      // Supprimer l'ancienne base de données si elle existe
+      const deleteRequest = indexedDB.deleteDatabase(this.DB_NAME);
+      
+      deleteRequest.onsuccess = () => {
+        console.log('[MediaDB] Ancienne base supprimée avec succès');
+        const request = indexedDB.open(this.DB_NAME, this.VERSION);
 
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        this.db = request.result;
-        resolve();
-      };
+        request.onerror = () => {
+          console.error('[MediaDB] Erreur d\'ouverture:', request.error);
+          reject(request.error);
+        };
 
-      request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
-        if (!db.objectStoreNames.contains(this.STORE_NAME)) {
+        request.onsuccess = () => {
+          console.log('[MediaDB] Base ouverte avec succès');
+          this.db = request.result;
+          resolve();
+        };
+
+        request.onupgradeneeded = () => {
+          console.log('[MediaDB] Mise à niveau de la base');
+          const db = (request.result as IDBDatabase);
+          
+          if (db.objectStoreNames.contains(this.STORE_NAME)) {
+            db.deleteObjectStore(this.STORE_NAME);
+          }
+          
           const store = db.createObjectStore(this.STORE_NAME, { keyPath: 'id' });
           store.createIndex('questionId', 'metadata.questionId', { unique: false });
           store.createIndex('type', 'type', { unique: false });
-        }
+          console.log('[MediaDB] Structure de la base mise à jour');
+        };
+      };
+
+      deleteRequest.onerror = () => {
+        console.error('[MediaDB] Erreur lors de la suppression de l\'ancienne base');
+        reject(deleteRequest.error);
       };
     });
   }
